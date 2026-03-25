@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -15,6 +16,10 @@ from .watcher import watch_path
 app = typer.Typer(help="Automated media library organizer (movies & TV).")
 
 logger = logging.getLogger(__name__)
+
+
+def _env_flag(name: str) -> bool:
+    return os.getenv(name, "").strip().lower() in ("1", "true", "yes", "on")
 
 
 @app.command()
@@ -70,6 +75,11 @@ def watch(
     pattern_tv: Optional[str] = typer.Option(None),
     use_metadata: bool = typer.Option(True),
     provider: str = typer.Option("omdb"),
+    poll: bool = typer.Option(
+        _env_flag("OMK_WATCH_POLL"),
+        "--poll/--no-poll",
+        help="Poll the filesystem (slower, reliable on Docker/NFS when events are missing). Env: OMK_WATCH_POLL=1.",
+    ),
     log_level: Optional[str] = typer.Option(None, "--log-level", help="Logging level (e.g. INFO, DEBUG). Defaults to OMK_LOG_LEVEL or INFO."),
 ) -> None:
     """
@@ -82,6 +92,7 @@ def watch(
         action=action,
         use_metadata=use_metadata,
         provider=provider,
+        watch_poll=poll,
     )
     if pattern_movie:
         config.pattern_movie = pattern_movie
@@ -90,15 +101,17 @@ def watch(
 
     configure_logging(log_level)
     logger.info(
-        "Watch started: path=%s dest=%s media_type=%s action=%s use_metadata=%s provider=%s",
+        "Watch started: path=%s dest=%s media_type=%s action=%s use_metadata=%s provider=%s poll=%s",
         path,
         dest,
         media_type.value,
         action.value,
         use_metadata,
         provider,
+        poll,
     )
-    typer.echo(f"Watching {path} for new media files...")
+    mode = "polling" if poll else "native events"
+    typer.echo(f"Watching {path} recursively ({mode}) for new and renamed media...")
     watch_path(config)
 
 

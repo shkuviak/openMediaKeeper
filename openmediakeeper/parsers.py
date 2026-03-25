@@ -23,7 +23,18 @@ EPISODE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-VIDEO_EXTENSIONS = {".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv"}
+VIDEO_EXTENSIONS = {
+    ".mkv",
+    ".mp4",
+    ".m4v",
+    ".avi",
+    ".mov",
+    ".wmv",
+    ".flv",
+    ".webm",
+    ".ts",
+    ".m2ts",
+}
 
 
 def is_video_file(path: Path) -> bool:

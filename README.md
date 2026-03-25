@@ -42,7 +42,9 @@ uv run omk scan /path/to/downloads \
 - `scan PATH`
   - Scan an existing folder and organize discovered media files.
 - `watch PATH`
-  - Watch a folder for newly created media files and organize them as they appear.
+  - Watch a folder for **new** and **renamed** media files (torrent clients often rename on completion) and organize them.
+  - By default uses the OS **native** watcher (`inotify` / FSEvents / ReadDirectoryChanges). On **Docker bind mounts**, **NFS**, or some **VM shared folders**, those events are often missing — use **`--poll`** or set **`OMK_WATCH_POLL=1`**.
+  - Subdirectories under `PATH` are always watched (recursive).
 
 Shared options (subject to change as the project evolves):
 
@@ -54,6 +56,7 @@ Shared options (subject to change as the project evolves):
 - `--use-metadata`: enable/disable metadata enrichment (provider-dependent)
 - `--provider`: metadata provider name (currently `omdb` or `noop`)
 - `--log-level`: `INFO`/`DEBUG`/... (defaults to `OMK_LOG_LEVEL` or `INFO`)
+- **`watch` only:** `--poll` / `--no-poll` (default follows `OMK_WATCH_POLL`)
 
 Available pattern variables include:
 
@@ -94,6 +97,11 @@ uv run uvicorn openmediakeeper.api:app --reload
 ```
 
 You can then call `POST /organize` with JSON describing `source_paths`, `dest_root`, and options like `media_type` / `action`.
+
+### Watch troubleshooting
+
+1. You should see log lines like `New file detected: ...` when the OS reports a create/rename. If you see **nothing**, try **`--poll`** (or `OMK_WATCH_POLL=1`).
+2. If you see `New file detected` but **`No organize action for video file`**, the filename does not match the built-in movie/TV patterns (run **`scan`** on the same path to verify, or use `--log-level DEBUG`).
 
 ## Logging strategy
 
