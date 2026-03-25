@@ -72,11 +72,15 @@ def apply_action(action: ActionType, src: Path, dest: Path) -> None:
         return
 
     dest.parent.mkdir(parents=True, exist_ok=True)
+    logger.info(f"Creating destination directory: {dest.parent}")
     if action == ActionType.MOVE:
+        logger.info(f"Moving {src} to {dest}")
         shutil.move(str(src), str(dest))
     elif action == ActionType.COPY:
+        logger.info(f"Copying {src} to {dest}")
         shutil.copy2(str(src), str(dest))
     elif action == ActionType.LINK:
+        logger.info(f"Linking {src} to {dest}")
         os.link(src, dest)
 
 
