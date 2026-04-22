@@ -1,115 +1,154 @@
 # openMediaKeeper
 
-Python backend and CLI to organize a local media library (movies and TV shows) in an automated and extensible way, inspired by tools like FileBot.
+Organize movie and TV files automatically from the command line.
 
-The backend is designed to:
+`openMediaKeeper` is a Python backend + CLI inspired by tools like FileBot. It can scan folders, watch ongoing downloads, and move/copy/hardlink media files into clean library paths using customizable templates.
 
-- Watch a folder for new media files and organize them automatically
-- Run one-off organization passes over an existing folder
-- Move, copy, or hardlink files into a clean folder structure
-- Normalize titles and years using external metadata sources (e.g. IMDb via OMDb)
-- Be API-ready so a web UI can be added later
+## What it does
 
-## Features (initial)
+- Organizes movies and TV episodes from filenames
+- Supports `move`, `copy`, `link`, and `dry-run`
+- Watches folders recursively for:
+  - newly created files
+  - renamed files (common with torrent clients on download completion)
+- Enriches metadata using OMDb (optional)
+- Exposes reusable core modules for future web/API workflows
 
-- CLI built with `typer`
-- Pluggable metadata providers (OMDb to start)
-- Basic filename parsing for movies and TV shows
-- Configurable organization actions:
-  - Move
-  - Copy
-  - Hardlink
-  - Dry-run
-- Optional folder watching using `watchdog`
+## Install
 
-## Quick start (with `uv`)
+This project uses `uv`.
 
 ```bash
+git clone <your-repo-url>
 cd openMediaKeeper
-
-# Install dependencies into an isolated environment
 uv sync
+```
 
-# Example: organize a folder of movies into /media/movies using move
+## Quick start
+
+Preview what would happen (safe):
+
+```bash
 uv run omk scan /path/to/downloads \
-  --media-type movie \
-  --dest /media/movies \
+  --dest /path/to/library \
+  --media-type auto \
+  --action dry-run
+```
+
+Apply real changes:
+
+```bash
+uv run omk scan /path/to/downloads \
+  --dest /path/to/library \
+  --media-type auto \
   --action move
 ```
 
-## CLI overview
+Watch a folder continuously:
 
-- `scan PATH`
-  - Scan an existing folder and organize discovered media files.
-- `watch PATH`
-  - Watch a folder for **new** and **renamed** media files (torrent clients often rename on completion) and organize them.
-  - By default uses the OS **native** watcher (`inotify` / FSEvents / ReadDirectoryChanges). On **Docker bind mounts**, **NFS**, or some **VM shared folders**, those events are often missing — use **`--poll`** or set **`OMK_WATCH_POLL=1`**.
-  - Subdirectories under `PATH` are always watched (recursive).
+```bash
+uv run omk watch /path/to/watch \
+  --dest /path/to/library \
+  --media-type auto \
+  --action move
+```
 
-Shared options (subject to change as the project evolves):
+## CLI commands
 
-- `--media-type`: `movie`, `tv`, or `auto`
-- `--dest`: destination root folder for organized media
-- `--action`: `move`, `copy`, `link`, or `dry-run`
-- `--pattern-movie`: override movie target pattern (template variables supported, see below)
-- `--pattern-tv`: override TV target pattern (template variables supported, see below)
-- `--use-metadata`: enable/disable metadata enrichment (provider-dependent)
-- `--provider`: metadata provider name (currently `omdb` or `noop`)
-- `--log-level`: `INFO`/`DEBUG`/... (defaults to `OMK_LOG_LEVEL` or `INFO`)
-- **`watch` only:** `--poll` / `--no-poll` (default follows `OMK_WATCH_POLL`)
+### `scan PATH`
 
-Available pattern variables include:
+Scan all files under `PATH` and organize matched media files.
 
-- Movies:
-  - `{title}`, `{year}`, `{year_part}`, `{ext}`
-  - `{original_name}` (filename without extension)
-  - `{original_basename}` (full original filename with extension)
-- TV:
-  - `{series_title}`, `{season}`, `{episode}`, `{title_suffix}`, `{ext}`
-  - `{original_name}`, `{original_basename}`
+### `watch PATH`
+
+Watch `PATH` recursively for create/rename events and organize as files appear.
+
+- If your filesystem misses native events (common with Docker bind mounts, NFS, VM shares), use polling:
+  - `--poll`
+  - or set `OMK_WATCH_POLL=1`
+
+## Common CLI options
+
+- `--dest`, `-d`: destination library root (required)
+- `--media-type`, `-m`: `movie`, `tv`, or `auto`
+- `--action`, `-a`: `move`, `copy`, `link`, `dry-run`
+- `--pattern-movie`: custom movie output template
+- `--pattern-tv`: custom TV output template
+- `--use-metadata`: enable/disable metadata provider lookup
+- `--provider`: metadata provider name (`omdb` or `noop`)
+- `--log-level`: logging level (`INFO`, `DEBUG`, etc.)
+- `watch` only: `--poll` / `--no-poll`
+
+## Pattern variables
+
+### Movie pattern variables
+
+- `{title}`
+- `{year}`
+- `{year_part}` (either ` (YYYY)` or empty)
+- `{ext}`
+- `{original_name}` (source filename without extension)
+- `{original_basename}` (source filename with extension)
+
+### TV pattern variables
+
+- `{series_title}`
+- `{season}`
+- `{episode}`
+- `{title_suffix}` (episode title formatted as ` - <title>`, or empty)
+- `{ext}`
+- `{original_name}`
+- `{original_basename}`
 
 ### Pattern examples
 
-Movies example (use original filename in the leaf):
+Movie (preserve original filename):
 
 `Movies/{title}{year_part}/{original_basename}`
 
-Movies example (default-like layout, with optional year):
+Movie (default behavior):
 
 `Movies/{title}{year_part}/{title}{year_part}.{ext}`
 
-TV example (include parsed episode title when available):
+TV (default behavior):
 
 `TV/{series_title}/Season {season:02d}/{series_title} - S{season:02d}E{episode:02d}{title_suffix}.{ext}`
 
-TV example (keep original basename):
+TV (preserve original filename):
 
 `TV/{series_title}/Season {season:02d}/{original_basename}`
 
-## API readiness
+## Logging and troubleshooting
 
-The core logic (parsing, metadata lookup, and path computation) is implemented in reusable modules and a small FastAPI app is provided in `openmediakeeper/api.py`.
+- Default logging level is `INFO`
+- Override via:
+  - `--log-level DEBUG`
+  - `OMK_LOG_LEVEL=DEBUG`
+- Typical watcher debug flow:
+  1. Confirm you see `New file detected` or `File renamed/moved`
+  2. If no watcher events appear, use `--poll`
+  3. If events appear but files are skipped, run with `--log-level DEBUG`
 
-Run the API with:
+## API usage (optional)
+
+A minimal FastAPI app is available in `openmediakeeper/api.py`.
+
+Run API server:
 
 ```bash
 uv run uvicorn openmediakeeper.api:app --reload
 ```
 
-You can then call `POST /organize` with JSON describing `source_paths`, `dest_root`, and options like `media_type` / `action`.
+Main endpoint:
 
-### Watch troubleshooting
+- `POST /organize`
+  - input: list of `source_paths`, `dest_root`, and processing options
+  - output: source-to-target mapping for organized files
 
-1. You should see log lines like `New file detected: ...` when the OS reports a create/rename. If you see **nothing**, try **`--poll`** (or `OMK_WATCH_POLL=1`).
-2. If you see `New file detected` but **`No organize action for video file`**, the filename does not match the built-in movie/TV patterns (run **`scan`** on the same path to verify, or use `--log-level DEBUG`).
+## Development docs
 
-## Logging strategy
+For architecture, contributor workflow, testing, and extension guidelines, see:
 
-Logging is done with Python's standard `logging` module and per-module loggers (`logger = logging.getLogger(__name__)`).
-
-- Default level is `INFO` (or override with the CLI option `--log-level` or env var `OMK_LOG_LEVEL`).
-- Use `INFO` for user-visible operational events (e.g. skipped `move`/`link` because the destination already exists).
-- Use `DEBUG` for troubleshooting (e.g. parser details when a filename can't be parsed).
-- Failures are logged with `logger.exception(...)` in long-running processes (e.g. the folder watcher) so you can see stack traces.
+- `docs/DEVELOPMENT.md`
 
 
